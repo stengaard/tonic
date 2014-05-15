@@ -79,7 +79,6 @@ func RunCommand(c *cli.Context) {
 			runner.Kill()
 			err := build(builder, logger)
 			if err == nil {
-				log.Println("starting")
 				runner.Run()
 			}
 			t = nil
