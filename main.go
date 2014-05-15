@@ -54,8 +54,10 @@ func RunCommand(c *cli.Context) {
 	runner := NewRunner(filepath.Join(wd, builder.Binary()), c.Args())
 	runner.SetWriter(os.Stdout)
 
-	build(builder, logger)
-	runner.Run()
+	err = build(builder, logger)
+	if err == nil {
+		runner.Run()
+	}
 
 	w, err := watch(c.GlobalString("path"))
 	if err != nil {
@@ -75,8 +77,11 @@ func RunCommand(c *cli.Context) {
 			}
 		case <-t:
 			runner.Kill()
-			build(builder, logger)
-			runner.Run()
+			err := build(builder, logger)
+			if err == nil {
+				log.Println("starting")
+				runner.Run()
+			}
 			t = nil
 
 		case err := <-w.Error:
@@ -85,7 +90,7 @@ func RunCommand(c *cli.Context) {
 	}
 }
 
-func build(builder gin.Builder, logger *log.Logger) {
+func build(builder gin.Builder, logger *log.Logger) error {
 	err := builder.Build()
 	if err != nil {
 		logger.Println("Err - Build failed!")
@@ -94,6 +99,7 @@ func build(builder gin.Builder, logger *log.Logger) {
 		logger.Println("Build successful")
 	}
 	time.Sleep(100 * time.Millisecond)
+	return err
 }
 
 func ofInterest(ev *fsnotify.FileEvent) bool {
