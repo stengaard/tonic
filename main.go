@@ -51,7 +51,7 @@ func RunCommand(c *cli.Context) {
 	}
 
 	builder := gin.NewBuilder(".", c.GlobalString("bin"))
-	runner := NewRunner(filepath.Join(wd, builder.Binary()), c.Args())
+	runner := gin.NewRunner(filepath.Join(wd, builder.Binary()), c.Args()...)
 	runner.SetWriter(os.Stdout)
 
 	err = build(builder, logger)
