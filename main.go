@@ -5,6 +5,7 @@
 package main
 
 import (
+	"io/ioutil"
 	"strings"
 
 	gin "github.com/codegangsta/gin/lib"
@@ -49,13 +50,15 @@ func main() {
 
 func run(path, bin, buildArgs string, args []string) error {
 
-	wd, err := os.Getwd()
+	// Avoid littering in the local dir, create a tempfile.
+	dir, err := ioutil.TempDir("", "tonic-bin")
 	if err != nil {
 		return err
 	}
+	defer os.RemoveAll(dir)
 
-	builder := gin.NewBuilder(".", bin, false, wd, strings.Fields(buildArgs))
-	runner := gin.NewRunner(filepath.Join(wd, builder.Binary()), args...)
+	builder := gin.NewBuilder(".", bin, false, dir, strings.Fields(buildArgs))
+	runner := gin.NewRunner(filepath.Join(dir, bin), args...)
 	runner.SetWriter(os.Stdout)
 
 	err = build(builder, logger)
