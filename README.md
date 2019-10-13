@@ -12,7 +12,7 @@ to a `.go` file. Very crude, very simple.
  $ go get github.com/stengaard/tonic
  $ # to use in development:
  $ cd $GOPATH/go/src/myapp
- $ tonic run
+ $ tonic
  [tonic] Build successful
  [myapp] ready
 ```

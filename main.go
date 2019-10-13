@@ -5,10 +5,12 @@
 package main
 
 import (
-	"code.google.com/p/go.exp/fsnotify"
-	"github.com/codegangsta/cli"
-	gin "github.com/codegangsta/gin/lib"
+	"strings"
 
+	gin "github.com/codegangsta/gin/lib"
+	"github.com/fsnotify/fsnotify"
+
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -21,37 +23,39 @@ var (
 	logger    = log.New(os.Stdout, "[tonic] ", 0)
 )
 
-func main() {
-	app := cli.NewApp()
-	app.Name = "tonic"
-	app.Usage = "A live reload utility for Go apps"
-	app.Action = RunCommand
-	app.Flags = []cli.Flag{
-		cli.StringFlag{"path,t", ".", "Path to watch files from"},
-		cli.StringFlag{"bin,b", "tonic-bin", "Name of generated binary file"},
-	}
+func usage() {
+	header := `tonic is a live reload utility for Go apps.
 
-	app.Commands = []cli.Command{
-		{
-			Name:      "run",
-			ShortName: "r",
-			Usage:     "Build and run the given command",
-			Action:    RunCommand,
-		},
-	}
-
-	app.Run(os.Args)
+Usage of tonic:
+`
+	out := flag.CommandLine.Output()
+	fmt.Fprintln(out, header)
+	flag.PrintDefaults()
 }
 
-func RunCommand(c *cli.Context) {
+func main() {
+	flag.Usage = usage
+	var (
+		path      = flag.String("path", ".", "Path to recursively watch files under")
+		bin       = flag.String("bin", "tonic-bin", "Name of generated binary")
+		buildArgs = flag.String("build-args", "", "Extra build ars to pass in")
+	)
+	flag.Parse()
+	if err := run(*path, *bin, *buildArgs, flag.Args()); err != nil {
+		fmt.Fprintf(os.Stderr, "tonic: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func run(path, bin, buildArgs string, args []string) error {
 
 	wd, err := os.Getwd()
 	if err != nil {
-		logger.Fatal(err)
+		return err
 	}
 
-	builder := gin.NewBuilder(".", c.GlobalString("bin"))
-	runner := gin.NewRunner(filepath.Join(wd, builder.Binary()), c.Args()...)
+	builder := gin.NewBuilder(".", bin, false, wd, strings.Fields(buildArgs))
+	runner := gin.NewRunner(filepath.Join(wd, builder.Binary()), args...)
 	runner.SetWriter(os.Stdout)
 
 	err = build(builder, logger)
@@ -59,17 +63,16 @@ func RunCommand(c *cli.Context) {
 		runner.Run()
 	}
 
-	w, err := watch(c.GlobalString("path"))
+	w, err := watch(path)
 	if err != nil {
-		logger.Fatal(err)
+		return err
 	}
 
 	var t <-chan time.Time
 	for {
 		select {
-		case ev := <-w.Event:
+		case ev := <-w.Events:
 			if ofInterest(ev) {
-				//logger.Println(ev)
 				// debounce
 				if t == nil {
 					t = time.After(100 * time.Millisecond)
@@ -83,8 +86,8 @@ func RunCommand(c *cli.Context) {
 			}
 			t = nil
 
-		case err := <-w.Error:
-			logger.Fatal(err)
+		case err := <-w.Errors:
+			return err
 		}
 	}
 }
@@ -101,7 +104,7 @@ func build(builder gin.Builder, logger *log.Logger) error {
 	return err
 }
 
-func ofInterest(ev *fsnotify.FileEvent) bool {
+func ofInterest(ev fsnotify.Event) bool {
 	if ev.Name == ".git" {
 		return false
 	}
@@ -126,13 +129,13 @@ func watch(root string) (*fsnotify.Watcher, error) {
 }
 
 func addAllDirs(w *fsnotify.Watcher, root string) error {
-	err := w.Watch(root)
+	err := w.Add(root)
 	if err != nil {
 		return err
 	}
 	return filepath.Walk(root, func(p string, i os.FileInfo, err error) error {
 		if i.IsDir() {
-			return w.Watch(p)
+			return w.Add(p)
 		}
 		return nil
 	})
